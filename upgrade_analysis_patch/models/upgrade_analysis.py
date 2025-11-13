@@ -1,10 +1,11 @@
-from odoo import fields, models, release
+from odoo import fields, models
 import logging
 
 from .. import compare
+from odoo.addons.upgrade_analysis import compare as original_compare
 
 try:
-    from odoo.addons.openupgrade_scripts.apriori import merged_modules, renamed_modules
+    from odoo.addons.openupgrade_scripts.apriori import merged_modules, renamed_modules # type: ignore
 except ImportError:
     renamed_modules = {}
     merged_modules = {}
@@ -39,7 +40,7 @@ class UpgradeAnalysis(models.Model):
         remote_record_obj = self._get_remote_model(connection, "record")
         local_record_obj = self.env["upgrade.record"]
         local_modules = local_record_obj.list_modules()
-        all_remote_modules = self._get_remote_modules(remote_record_obj)
+        all_remote_modules = self._get_remote_modules(remote_record_obj) # This is changed
         for local_module in local_modules:
             remote_files = []
             remote_modules = []
@@ -111,15 +112,15 @@ class UpgradeAnalysis(models.Model):
             "definition",
         ]
         local_xml_records = [
-            {field: record[field] for field in flds if field in record}
+            {field: record[field] for field in flds if field in record} # This is patched
             for record in LocalRecord.search([("type", "=", "xmlid")])
         ]
-        remote_xml_record_ids = RemoteRecord.search([("type", "=", "xmlid")])
+        remote_xml_record_ids = RemoteRecord.search([("type", "=", "xmlid")]) # This is patched
         remote_xml_records = [
             {field: record[field] for field in flds if field in record}
             for record in RemoteRecord.read(remote_xml_record_ids, flds)
         ]
-        res_xml = compare.compare_xml_sets(remote_xml_records, local_xml_records)
+        res_xml = original_compare.compare_xml_sets(remote_xml_records, local_xml_records)
 
         # Retrieve model representations and compare
         flds = [
@@ -134,14 +135,18 @@ class UpgradeAnalysis(models.Model):
             for record in LocalRecord.search([("type", "=", "model")])
         ]
         remote_model_record_ids = RemoteRecord.search([("type", "=", "model")])
+        _logger.info("DEBUG -> remote_model_record_ids = %s", remote_model_record_ids)
+        _logger.info("DEBUG -> flds = %s", flds)
+        for record in RemoteRecord.read(remote_model_record_ids, flds):
+            _logger.info("DEBUG -> record = %s", record)
+        
         remote_model_records = [
             {field: record[field] for field in flds}
             for record in RemoteRecord.read(remote_model_record_ids, flds)
         ]
-        res_model = compare.compare_model_sets(
+        res_model = original_compare.compare_model_sets(
             remote_model_records, local_model_records
         )
-        remote_modules = set([record["module"] for record in remote_records])
 
         affected_modules = sorted(
             {
@@ -204,7 +209,7 @@ class UpgradeAnalysis(models.Model):
             if key == "general":
                 general_log += contents
                 continue
-            if compare.module_map(key) not in modules:
+            if original_compare.module_map(key) not in modules:
                 general_log += (
                     "ERROR: module not in list of installed modules:\n" + contents
                 )
